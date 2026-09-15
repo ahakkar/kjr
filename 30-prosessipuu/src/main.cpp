@@ -26,10 +26,7 @@ int32_t getPidWidth();
 vector<string> getPidList(vector<directory_entry> procList);
 vector<directory_entry> getProcList();
 
-std::map<string, string> getProcParents(
-    vector<directory_entry> procList,
-    vector<string> pidList
-);
+std::map<string, string> getProcParents(vector<directory_entry> procList);
 
 string readProcStat(directory_entry dirEntry);
 
@@ -103,7 +100,7 @@ int main()
 {        
     auto procList = getProcList();
     auto pidList = getPidList(procList);
-    auto procParents = getProcParents(procList, pidList);
+    auto procParents = getProcParents(procList);
 
     std::println("{}", procParents);
     
@@ -114,10 +111,7 @@ int main()
 /**
  * Read each processes parent id from /proc/PID/stat
  */
-std::map<string, string> getProcParents(
-    vector<directory_entry> procList,
-    vector<string> pidList
-)
+std::map<string, string> getProcParents(vector<directory_entry> procList)
 {
     std::map<string, string> procParents{};
 
