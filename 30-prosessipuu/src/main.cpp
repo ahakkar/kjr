@@ -43,6 +43,7 @@ constexpr string PROC_STAT_FOLDER = "/stat";
 
 
 // Formatter for map<K,V> - assumes that the types can actually be formatted...
+// https://www.cppstories.com/2022/custom-stdformat-cpp20/
 template <typename K, typename V>
 struct std::formatter<std::map<K, V>> {
     constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
