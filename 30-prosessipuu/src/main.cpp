@@ -1,4 +1,20 @@
 #include <print>
+#include <filesystem>
+#include <vector>
+#include <string>
+
+// Using
+using std::filesystem::path;
+using std::filesystem::directory_entry;
+using std::filesystem::directory_iterator;
+
+using std::string;
+
+using std::vector;
+
+// Forward declarations
+vector<directory_entry> getProcList();
+
 // g++ main.cpp -std=c++23 -o main && ./main
 
 /*
@@ -27,8 +43,8 @@ Käyttöjärjestelmä ei välttämättä osaa etukäteen vastata esim kyselyyn, 
 suuri virtuaalinen tiedosto /proc:ssa on, joten sitä on parasta lukea virtana
 esim. stringstreamin avulla niin kauan, kuin käyttöjärjestelmä tarjoaa uutta tietoa.
 
-Käytännössä prosessilistauksen lukemiseen tarvitsee C opendir() readdir() closedir()
-funktiokutsuja. 
+Prosessilistauksen lukemisen voi tehdä esim. C opendir() readdir() closedir()
+funktiokutsuilla tai std::filesystem::directory_iterator avulla.
 1. Luetaan /proc :sta lista kaikista prosesseista.
 2. Luetaan luupissa /proc/PID/{stat tai status} jokaisen prosessin parent id
 3. Rakenetaan soveltuva tietorakenne josta voi tulostaa puun alkaen sen juuresta
@@ -36,8 +52,29 @@ funktiokutsuja.
    tiedostoon tms.
 */
 
+
 int main()
-{
-    std::print("Hello c++");
+{    
+    auto procList = getProcList();
+    vector<string> pidList{};
+    
+    for (auto const& dirEntry : procList) {
+        std::println("{}", dirEntry.path().string());
+    }
+    
     return 0;
 }
+
+
+vector<directory_entry> getProcList()
+{
+    const path procPath = "/proc";
+    vector<directory_entry> procList{};   
+
+    for (auto const& dirEntry : directory_iterator(procPath) ) {
+        procList.push_back(dirEntry);
+    }
+
+    return procList;
+}
+
