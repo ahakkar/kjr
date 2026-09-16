@@ -42,6 +42,14 @@ Map<int32_t, Vector<int32_t>> getProcTree(const Map<int32_t, int32_t>& procParen
 
 void sortChildren(Map<int32_t, Vector<int32_t>> &m);
 
+void printTree(
+    const int32_t current,
+    const Map<int32_t, Vector<int32_t>>& procTree,
+    const String& prefix,
+    bool isLast,
+    bool isRoot
+);
+
 struct Process {
     String pid;
     String parentPid;
@@ -116,9 +124,51 @@ int main()
     auto procParents = getProcParents(procList);
     auto procTree = getProcTree(procParents);
 
-    std::println("{}", procTree);
-    
+    auto it = procTree.begin();
+    if (it != procTree.end()) {
+        int32_t current  = it->first;        
+        printTree(current, procTree, "", false, true);
+    }
+
     return 0;
+}
+
+
+/**
+ * Recursively prints the provided parent-children map to console as a tree
+ */
+void printTree(
+    const int32_t current,
+    const Map<int32_t, Vector<int32_t>>& procTree,
+    const String& prefix = "",
+    bool isLast = true,
+    bool isRoot = true
+)
+{
+    // Makes root look a bit nicer
+    if (isRoot) {
+        std::print("{}\n", current);
+    } else {
+        std::print("{}{}{}\n", prefix, isLast ? "└─ " : "├─ ", current);
+    }
+
+    auto it = procTree.find(current);
+    if (it == procTree.end()) { return; }
+
+    // Which prefix the next printed child should have?
+    const auto& children = it->second;
+    String childPrefix = isRoot ? "" : prefix + (isLast ? "   " : "│  ");
+
+    // Recursively call the function for each child
+    for (size_t i = 0; i < children.size(); ++i) {
+        printTree(
+            children[i],
+            procTree,
+            childPrefix,
+            i == children.size() - 1,
+            false
+        );
+    }
 }
 
 
@@ -167,15 +217,8 @@ Map<int32_t, int32_t> getProcParents(const Vector<DirectoryEntry>& procList)
         std::optional<int32_t> maybePid = getPidFromEntry(dirEntry);
         std::optional<int32_t> maybePPid = getParentPid(procStat);
 
-        if (!maybePid) {
-            // std::println("Skipping {}", dirEntry.path().string());
-            continue;  
-        }
-
-        if (!maybePPid) {
-            // std::println("Skipping {}", procStat);
-            continue;  
-        }
+        if (!maybePid) { continue; }
+        if (!maybePPid) { continue; }
 
         int32_t processPid = *maybePid;        
         int32_t parentPid = *maybePPid;
@@ -185,6 +228,7 @@ Map<int32_t, int32_t> getProcParents(const Vector<DirectoryEntry>& procList)
 
     return procParents;
 }
+
 
 /**
  * Read /proc/sys/kernel/pid_max
