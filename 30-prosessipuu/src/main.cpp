@@ -1,8 +1,10 @@
+#include <charconv>
 #include <cstdint>
 #include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <print>
 #include <ranges>
 #include <string>
@@ -11,9 +13,8 @@
 
 // Using
 using std::filesystem::path;
-using std::filesystem::directory_entry;
 using std::filesystem::directory_iterator;
-
+using DirectoryEntry = std::filesystem::directory_entry;
 using String = std::string;  
 
 template <typename T>
@@ -23,34 +24,40 @@ template <typename K, typename V>
 using Map = std::map<K, V>;
 
 // Forward declarations
-String getParentPid(String procStat);
-
-String getPidFromEntry(directory_entry dirEntry);
-
-String readProcStat(directory_entry dirEntry);
-
 int32_t getPidWidth(); 
 
-Vector<String> getPidList(Vector<directory_entry> procList);
+String readProcStat(DirectoryEntry dirEntry);
 
-Vector<directory_entry> getProcList();
+std::optional<int32_t> getParentPid(std::string_view procStat);
 
-Map<String, String> getProcParents(Vector<directory_entry> procList);
+std::optional<int32_t> getPidFromEntry(const DirectoryEntry& dirEntry);
+
+Vector<int32_t> getPidList(Vector<DirectoryEntry> procList);
+
+Vector<DirectoryEntry> getProcList();
+
+Map<int32_t, int32_t> getProcParents(Vector<DirectoryEntry> procList);
+
+Map<int32_t, Vector<int32_t>> getProcTree(Map<int32_t, int32_t> procParents);
+
+void sortChildren(Map<int32_t, Vector<int32_t>> &m);
 
 struct Process {
     String pid;
     String parentPid;
 };
 
-constexpr String PROC_FOLDER = "/proc";
-constexpr String PROC_STAT_FOLDER = "/stat";
+const String PROC_FOLDER = "/proc";
+const String PROC_STAT_FOLDER = "/stat";
+const String PID_MAX_PATH = "/proc/sys/kernel/pid_max";
 
 
 // Formatter for map<K,V> - assumes that the types can actually be formatted...
 // gcc support for this comes native in 15.1 onwards
 // https://www.cppstories.com/2022/custom-stdformat-cpp20/
 template <typename K, typename V>
-struct std::formatter<Map<K, V>> {
+struct std::formatter<Map<K, V>>
+{
     constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
 
     auto format(const Map<K, V>& m, std::format_context& ctx) const {
@@ -67,24 +74,86 @@ struct std::formatter<Map<K, V>> {
 };
 
 
+// Copypaste from above but just for vectors
+template <typename T>
+struct std::formatter<Vector<T>> 
+{
+    constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+
+    auto format(const Vector<T>& v, std::format_context& ctx) const {
+        auto out = ctx.out();
+        out = std::format_to(out, "(");        
+        bool first = true;
+
+        for (const auto& elem : v) {
+            out = std::format_to(out, "{}{}", first ? "" : ", ", elem);
+            first = false;
+        }
+        return std::format_to(out, ")");
+    }
+};
+
+
+template <std::integral T = int32_t>
+std::optional<T> parseInt(std::string_view sv)
+{
+    T value{};
+    auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), value);
+
+    if (ec == std::errc{} && ptr == sv.data() + sv.size()) {
+        return value;
+    }
+
+    return std::nullopt;
+}
+
+
 int main()
 {        
-    auto procList = getProcList();
-    auto pidList = getPidList(procList);
+    auto procList = getProcList();    
+    auto pidList = getPidList(procList);    
     auto procParents = getProcParents(procList);
+    auto procTree = getProcTree(procParents);
 
-    std::println("{}", procParents);
+    std::println("{}", procTree);
     
     return 0;
 }
 
 
 /**
+ * Iterate through the parents dict and construct a dict where each node knows its
+ * children
+ */
+Map<int32_t, Vector<int32_t>> getProcTree(Map<int32_t, int32_t> procParents) {
+    Map<int32_t, Vector<int32_t>> tree{};
+
+    for (auto const& [current, parent] : procParents) {
+        auto [it, inserted] = tree.try_emplace(parent);
+        it->second.push_back(current);
+    }
+    
+    sortChildren(tree);
+    return tree;
+}
+
+
+/**
+ * Sorts the provided map's vectors in ascending order
+ */
+void sortChildren(Map<int32_t, Vector<int32_t>> &m) {
+    for (auto [k, v] : m) {
+        std::sort(v.begin(), v.end());
+    }
+}
+
+
+/**
  * Read each processes parent id from /proc/PID/stat
  */
-std::map<String, String> getProcParents(Vector<directory_entry> procList)
+Map<int32_t, int32_t> getProcParents(Vector<DirectoryEntry> procList)
 {
-    std::map<String, String> procParents{};
+    Map<int32_t, int32_t> procParents{};
 
     for (auto const& dirEntry : procList) {
         String procStat = readProcStat(dirEntry);
@@ -94,11 +163,21 @@ std::map<String, String> getProcParents(Vector<directory_entry> procList)
             continue;
         }
 
-        String processPid = getPidFromEntry(dirEntry);
-        String parentPid = getParentPid(procStat);
+        std::optional<int32_t> maybePid = getPidFromEntry(dirEntry);
+        std::optional<int32_t> maybePPid = getParentPid(procStat);
 
-        // Ignore self process
-        if (processPid == "self" || processPid == "thread-self") { continue; }
+        if (!maybePid) {
+            // std::println("Skipping {}", dirEntry.path().string());
+            continue;  
+        }
+
+        if (!maybePPid) {
+            // std::println("Skipping {}", procStat);
+            continue;  
+        }
+
+        int32_t processPid = *maybePid;        
+        int32_t parentPid = *maybePPid;
 
         procParents.insert_or_assign(processPid, parentPid);
     }
@@ -106,14 +185,13 @@ std::map<String, String> getProcParents(Vector<directory_entry> procList)
     return procParents;
 }
 
-
 /**
  * Read /proc/sys/kernel/pid_max
  * 7 nums ie 4194304 -> 64bit
  * 5 nums ie 32768   -> 32bit
  */
 int32_t getPidWidth() {
-    std::ifstream iStream("/proc/sys/kernel/pid_max");
+    std::ifstream iStream(PID_MAX_PATH);
     String line = "";
 
     if (iStream.is_open()) {  
@@ -124,8 +202,11 @@ int32_t getPidWidth() {
 }
 
 
-String getPidFromEntry(directory_entry dirEntry) {
-    return dirEntry.path().filename().string();
+/**
+ * Extract PID from a /proc directory path
+ */
+std::optional<int32_t> getPidFromEntry(const DirectoryEntry& dirEntry) {
+    return parseInt<int32_t>(dirEntry.path().filename().string());
 }
 
 
@@ -133,17 +214,23 @@ String getPidFromEntry(directory_entry dirEntry) {
  * Extract parent PID from a stat string. It is 4th entry in the string, entries are
  * separated by a space.
  */
-String getParentPid(String procStat) {
-    auto it = std::views::split(procStat, ' ');
-    auto fourth = *std::ranges::next(it.begin(), 3);
-    return String(fourth.begin(), fourth.end());
+std::optional<int32_t> getParentPid(std::string_view procStat) {
+    auto fields = std::views::split(procStat, ' ');
+    auto it = std::ranges::next(fields.begin(), 3, fields.end());
+
+    if (it == fields.end()) {
+        return std::nullopt; 
+    }
+
+    auto fourth = *it;
+    return parseInt<int32_t>(std::string_view(fourth.begin(), fourth.end()));
 }
 
 
 /**
  * Read proc stat from a process. Returns an empty string if nothing was read.
  */
-String readProcStat(directory_entry dirEntry) {
+String readProcStat(DirectoryEntry dirEntry) {
     const String procStatPath = dirEntry.path().string() + PROC_STAT_FOLDER;
     std::ifstream iStream(procStatPath);
     String line = "";
@@ -159,9 +246,9 @@ String readProcStat(directory_entry dirEntry) {
 /**
  * Get the list of all process entries on system
  */
-Vector<directory_entry> getProcList()
+Vector<DirectoryEntry> getProcList()
 {
-    Vector<directory_entry> procList{};   
+    Vector<DirectoryEntry> procList{};   
 
     for (auto const& dirEntry : directory_iterator(PROC_FOLDER) ) {
         procList.push_back(dirEntry);
@@ -174,13 +261,16 @@ Vector<directory_entry> getProcList()
 /**
  * Extract process pids from the entry list
  */
-Vector<String> getPidList(Vector<directory_entry> procList) {    
-    Vector<String> pidList{};
+Vector<int32_t> getPidList(Vector<DirectoryEntry> procList) {    
+    Vector<int32_t> pidList{};
     
     for (auto const& dirEntry : procList) {
-        pidList.push_back(getPidFromEntry(dirEntry));
+        std::optional<int32_t> maybePid = getPidFromEntry(dirEntry);
+        if (!maybePid) {
+            continue;  
+        }
+        pidList.push_back(*maybePid);
     }
 
     return pidList;
 }
-
