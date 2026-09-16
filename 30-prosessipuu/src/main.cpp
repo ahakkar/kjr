@@ -26,19 +26,19 @@ using Map = std::map<K, V>;
 // Forward declarations
 int32_t getPidWidth(); 
 
-String readProcStat(DirectoryEntry dirEntry);
+String readProcStat(const DirectoryEntry& dirEntry);
 
 std::optional<int32_t> getParentPid(std::string_view procStat);
 
 std::optional<int32_t> getPidFromEntry(const DirectoryEntry& dirEntry);
 
-Vector<int32_t> getPidList(Vector<DirectoryEntry> procList);
+Vector<int32_t> getPidList(const Vector<DirectoryEntry>& procList);
 
 Vector<DirectoryEntry> getProcList();
 
-Map<int32_t, int32_t> getProcParents(Vector<DirectoryEntry> procList);
+Map<int32_t, int32_t> getProcParents(const Vector<DirectoryEntry>& procList);
 
-Map<int32_t, Vector<int32_t>> getProcTree(Map<int32_t, int32_t> procParents);
+Map<int32_t, Vector<int32_t>> getProcTree(const Map<int32_t, int32_t>& procParents);
 
 void sortChildren(Map<int32_t, Vector<int32_t>> &m);
 
@@ -94,6 +94,7 @@ struct std::formatter<Vector<T>>
 };
 
 
+// Used to parse int32's from pid strings
 template <std::integral T = int32_t>
 std::optional<T> parseInt(std::string_view sv)
 {
@@ -125,7 +126,7 @@ int main()
  * Iterate through the parents dict and construct a dict where each node knows its
  * children
  */
-Map<int32_t, Vector<int32_t>> getProcTree(Map<int32_t, int32_t> procParents) {
+Map<int32_t, Vector<int32_t>> getProcTree(const Map<int32_t, int32_t>& procParents) {
     Map<int32_t, Vector<int32_t>> tree{};
 
     for (auto const& [current, parent] : procParents) {
@@ -151,7 +152,7 @@ void sortChildren(Map<int32_t, Vector<int32_t>> &m) {
 /**
  * Read each processes parent id from /proc/PID/stat
  */
-Map<int32_t, int32_t> getProcParents(Vector<DirectoryEntry> procList)
+Map<int32_t, int32_t> getProcParents(const Vector<DirectoryEntry>& procList)
 {
     Map<int32_t, int32_t> procParents{};
 
@@ -230,7 +231,7 @@ std::optional<int32_t> getParentPid(std::string_view procStat) {
 /**
  * Read proc stat from a process. Returns an empty string if nothing was read.
  */
-String readProcStat(DirectoryEntry dirEntry) {
+String readProcStat(const DirectoryEntry& dirEntry) {
     const String procStatPath = dirEntry.path().string() + PROC_STAT_FOLDER;
     std::ifstream iStream(procStatPath);
     String line = "";
@@ -261,7 +262,7 @@ Vector<DirectoryEntry> getProcList()
 /**
  * Extract process pids from the entry list
  */
-Vector<int32_t> getPidList(Vector<DirectoryEntry> procList) {    
+Vector<int32_t> getPidList(const Vector<DirectoryEntry>& procList) {    
     Vector<int32_t> pidList{};
     
     for (auto const& dirEntry : procList) {
