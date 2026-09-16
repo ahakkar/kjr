@@ -14,38 +14,46 @@ using std::filesystem::path;
 using std::filesystem::directory_entry;
 using std::filesystem::directory_iterator;
 
-using std::string;
+using String = std::string;  
 
-using std::vector;
+template <typename T>
+using Vector = std::vector<T>;
+
+template <typename K, typename V>
+using Map = std::map<K, V>;
 
 // Forward declarations
-string getParentPid(string procStat);
-string getPidFromEntry(directory_entry dirEntry);
+String getParentPid(String procStat);
+
+String getPidFromEntry(directory_entry dirEntry);
+
+String readProcStat(directory_entry dirEntry);
+
 int32_t getPidWidth(); 
 
-vector<string> getPidList(vector<directory_entry> procList);
-vector<directory_entry> getProcList();
+Vector<String> getPidList(Vector<directory_entry> procList);
 
-std::map<string, string> getProcParents(vector<directory_entry> procList);
+Vector<directory_entry> getProcList();
 
-string readProcStat(directory_entry dirEntry);
+Map<String, String> getProcParents(Vector<directory_entry> procList);
 
 struct Process {
-    string pid;
-    string parentPid;
+    String pid;
+    String parentPid;
 };
 
-constexpr string PROC_FOLDER = "/proc";
-constexpr string PROC_STAT_FOLDER = "/stat";
+constexpr String PROC_FOLDER = "/proc";
+constexpr String PROC_STAT_FOLDER = "/stat";
 
 
 // Formatter for map<K,V> - assumes that the types can actually be formatted...
+// gcc support for this comes native in 15.1 onwards
 // https://www.cppstories.com/2022/custom-stdformat-cpp20/
 template <typename K, typename V>
-struct std::formatter<std::map<K, V>> {
+struct std::formatter<Map<K, V>> {
     constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
 
-    auto format(const std::map<K, V>& m, std::format_context& ctx) const {
+    auto format(const Map<K, V>& m, std::format_context& ctx) const {
         auto out = ctx.out();
         bool first = true; // separates entries by ', ' after first entry.
 
@@ -57,43 +65,6 @@ struct std::formatter<std::map<K, V>> {
         return out;
     }
 };
-
-// g++ main.cpp -std=c++23 -o main && ./main
-
-/*
-Tehtävänanto: Kerää kaikista /proc-tiedostojärjestelmässä näkyvistä prosesseista 
-PID ja ParentPID tiedot. Tulosta puurakenne näistä suhteista.
-
-Ohjelman perusperiaate lienee toimia vastaavasti kuin pstree, joka on kehitetty
-alun perin shell-skriptinä 1990-luvulla:
-    https://github.com/FredHucht/pstree/tree/main
-*/
-
-/*
-Linkkejä:
-https://gitlab.com/procps-ng/procps/
-https://www.kernel.org/doc/html/v4.12/core-api/kernel-api.html
-*/
-
-/*
-https://www.kernel.org/doc/html/latest/filesystems/proc.html
-
-/proc on virtuaalinen muistissa sijaitseva tiedostojärjestelmä, josta voi 
-tavanomaisin menetelmin lukea tietoa. Käyttöjärjestelmä taustalla luo lennosta
-tarvittavan tiedon, joka vastaa esim käyttäjän tiedostonlukuoperaatioon.
-
-Käyttöjärjestelmä ei välttämättä osaa etukäteen vastata esim kyselyyn, miten
-suuri virtuaalinen tiedosto /proc:ssa on, joten sitä on parasta lukea virtana
-esim. stringstreamin avulla niin kauan, kuin käyttöjärjestelmä tarjoaa uutta tietoa.
-
-Prosessilistauksen lukemisen voi tehdä esim. C opendir() readdir() closedir()
-funktiokutsuilla tai std::filesystem::directory_iterator avulla.
-1. Luetaan /proc :sta lista kaikista prosesseista.
-2. Luetaan luupissa /proc/PID/{stat tai status} jokaisen prosessin parent id
-3. Rakenetaan soveltuva tietorakenne josta voi tulostaa puun alkaen sen juuresta
-4. Tulostetaan tietorakenne sopivassa muodossa formatoituna komentoriville/
-   tiedostoon tms.
-*/
 
 
 int main()
@@ -111,20 +82,20 @@ int main()
 /**
  * Read each processes parent id from /proc/PID/stat
  */
-std::map<string, string> getProcParents(vector<directory_entry> procList)
+std::map<String, String> getProcParents(Vector<directory_entry> procList)
 {
-    std::map<string, string> procParents{};
+    std::map<String, String> procParents{};
 
     for (auto const& dirEntry : procList) {
-        string procStat = readProcStat(dirEntry);
+        String procStat = readProcStat(dirEntry);
 
         // TODO figure out why some processes don't yield info
         if (procStat.length() == 0) {
             continue;
         }
 
-        string processPid = getPidFromEntry(dirEntry);
-        string parentPid = getParentPid(procStat);
+        String processPid = getPidFromEntry(dirEntry);
+        String parentPid = getParentPid(procStat);
 
         // Ignore self process
         if (processPid == "self" || processPid == "thread-self") { continue; }
@@ -143,7 +114,7 @@ std::map<string, string> getProcParents(vector<directory_entry> procList)
  */
 int32_t getPidWidth() {
     std::ifstream iStream("/proc/sys/kernel/pid_max");
-    std::string line = "";
+    String line = "";
 
     if (iStream.is_open()) {  
         std::getline(iStream, line);
@@ -153,7 +124,7 @@ int32_t getPidWidth() {
 }
 
 
-string getPidFromEntry(directory_entry dirEntry) {
+String getPidFromEntry(directory_entry dirEntry) {
     return dirEntry.path().filename().string();
 }
 
@@ -162,20 +133,20 @@ string getPidFromEntry(directory_entry dirEntry) {
  * Extract parent PID from a stat string. It is 4th entry in the string, entries are
  * separated by a space.
  */
-string getParentPid(string procStat) {
+String getParentPid(String procStat) {
     auto it = std::views::split(procStat, ' ');
     auto fourth = *std::ranges::next(it.begin(), 3);
-    return string(fourth.begin(), fourth.end());
+    return String(fourth.begin(), fourth.end());
 }
 
 
 /**
  * Read proc stat from a process. Returns an empty string if nothing was read.
  */
-string readProcStat(directory_entry dirEntry) {
-    const string procStatPath = dirEntry.path().string() + PROC_STAT_FOLDER;
+String readProcStat(directory_entry dirEntry) {
+    const String procStatPath = dirEntry.path().string() + PROC_STAT_FOLDER;
     std::ifstream iStream(procStatPath);
-    std::string line = "";
+    String line = "";
 
     if (iStream.is_open()) {  
         std::getline(iStream, line);
@@ -188,9 +159,9 @@ string readProcStat(directory_entry dirEntry) {
 /**
  * Get the list of all process entries on system
  */
-vector<directory_entry> getProcList()
+Vector<directory_entry> getProcList()
 {
-    vector<directory_entry> procList{};   
+    Vector<directory_entry> procList{};   
 
     for (auto const& dirEntry : directory_iterator(PROC_FOLDER) ) {
         procList.push_back(dirEntry);
@@ -203,8 +174,8 @@ vector<directory_entry> getProcList()
 /**
  * Extract process pids from the entry list
  */
-vector<string> getPidList(vector<directory_entry> procList) {    
-    vector<string> pidList{};
+Vector<String> getPidList(Vector<directory_entry> procList) {    
+    Vector<String> pidList{};
     
     for (auto const& dirEntry : procList) {
         pidList.push_back(getPidFromEntry(dirEntry));
