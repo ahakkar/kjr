@@ -117,10 +117,12 @@ std::optional<T> parseInt(std::string_view sv)
 }
 
 
+/**
+ * Program flow follows steps 1-4 from README.md
+ */
 int main()
 {        
     auto procList = getProcList();    
-    auto pidList = getPidList(procList);    
     auto procParents = getProcParents(procList);
     auto procTree = getProcTree(procParents);
 
@@ -231,23 +233,6 @@ Map<int32_t, int32_t> getProcParents(const Vector<DirectoryEntry>& procList)
 
 
 /**
- * Read /proc/sys/kernel/pid_max
- * 7 nums ie 4194304 -> 64bit
- * 5 nums ie 32768   -> 32bit
- */
-int32_t getPidWidth() {
-    std::ifstream iStream(PID_MAX_PATH);
-    String line = "";
-
-    if (iStream.is_open()) {  
-        std::getline(iStream, line);
-    }
-
-    return line.length();
-}
-
-
-/**
  * Extract PID from a /proc directory path
  */
 std::optional<int32_t> getPidFromEntry(const DirectoryEntry& dirEntry) {
@@ -303,6 +288,9 @@ Vector<DirectoryEntry> getProcList()
 }
 
 
+// Unused funcs below
+
+
 /**
  * Extract process pids from the entry list
  */
@@ -318,4 +306,21 @@ Vector<int32_t> getPidList(const Vector<DirectoryEntry>& procList) {
     }
 
     return pidList;
+}
+
+
+/**
+ * Read /proc/sys/kernel/pid_max
+ * 7 nums ie 4194304 -> 64bit
+ * 5 nums ie 32768   -> 32bit
+ */
+int32_t getPidWidth() {
+    std::ifstream iStream(PID_MAX_PATH);
+    String line = "";
+
+    if (iStream.is_open()) {  
+        std::getline(iStream, line);
+    }
+
+    return line.length();
 }
