@@ -1,0 +1,81 @@
+// Formatter for map<K,V> - assumes that the types can actually be formatted...
+// gcc support for this comes native in 15.1 onwards
+// https://www.cppstories.com/2022/custom-stdformat-cpp20/
+template <typename K, typename V>
+struct std::formatter<Map<K, V>>
+{
+    constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+
+    auto format(const Map<K, V>& m, std::format_context& ctx) const {
+        auto out = ctx.out();
+        bool first = true; // separates entries by ', ' after first entry.
+
+        for (const auto& [k, v] : m) {
+            out = std::format_to(out, "{}[{}, {}]", first ? "" : ", ", k, v);
+            first = false;
+        }
+        
+        return out;
+    }
+};
+
+
+// Copypaste from above but just for vectors
+template <typename T>
+struct std::formatter<Vector<T>> 
+{
+    constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }
+
+    auto format(const Vector<T>& v, std::format_context& ctx) const {
+        auto out = ctx.out();
+        out = std::format_to(out, "(");        
+        bool first = true;
+
+        for (const auto& elem : v) {
+            out = std::format_to(out, "{}{}", first ? "" : ", ", elem);
+            first = false;
+        }
+        return std::format_to(out, ")");
+    }
+};
+
+
+struct Process {
+    String pid;
+    String parentPid;
+};
+
+
+/**
+ * Extract process pids from the entry list
+ */
+Vector<int32_t> getPidList(const Vector<DirectoryEntry>& procList) {    
+    Vector<int32_t> pidList{};
+    
+    for (auto const& dirEntry : procList) {
+        std::optional<int32_t> maybePid = getPidFromEntry(dirEntry);
+        if (!maybePid) {
+            continue;  
+        }
+        pidList.push_back(*maybePid);
+    }
+
+    return pidList;
+}
+
+
+/**
+ * Read /proc/sys/kernel/pid_max
+ * 7 nums ie 4194304 -> 64bit
+ * 5 nums ie 32768   -> 32bit
+ */
+int32_t getPidWidth() {
+    std::ifstream iStream(PID_MAX_PATH);
+    String line = "";
+
+    if (iStream.is_open()) {  
+        std::getline(iStream, line);
+    }
+
+    return line.length();
+}
