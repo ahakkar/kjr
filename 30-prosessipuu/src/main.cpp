@@ -17,15 +17,11 @@ using std::filesystem::directory_iterator;
 using directory_entry = std::filesystem::directory_entry;
 
 // Forward declarations
-int32_t getPidWidth(); 
-
 std::string readProcStat(const directory_entry& dirEntry);
 
 std::optional<int32_t> getParentPid(std::string_view procStat);
 
 std::optional<int32_t> getPidFromEntry(const directory_entry& dirEntry);
-
-std::vector<int32_t> getPidList(const std::vector<directory_entry>& procList);
 
 std::vector<directory_entry> getProcList();
 
@@ -232,5 +228,3 @@ std::vector<directory_entry> getProcList()
 
     return procList;
 }
-
-
