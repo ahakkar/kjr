@@ -32,6 +32,11 @@ funktiokutsuilla tai std::filesystem::directory_iterator avulla.
 
 Vaiheet on toteutettu main()-funktiossa.
 
+## Potentiaalinen ongelma
+
+Pitäiskö  prosesseja käsitellä jollain uniikimmalla yksilöivällä muuttujalla kun PID? Periaattessa saman PID voi tarkoittaa eri ohjelmaa, jos jokin prosessi sammutetaan ja uusi, eri ohjelma käynnistetään, ja sille annetaan sama PID, kesken ton prosessipuu-ohjelman ajon.
+
+Yllättävän paljon päänvaivaa aiheuttaa, että /proc:sta luettu tieto ei ole stabiilia, vaan voi muuttua kesken kaiken. Pohdin pitkään, että pitääkö sitä jotenkin ottaa huomioon vai ei, ja päädyin tulokseen, että alustavasti asiaa ei oteta huomioon. Jos jatkoselvittelyjen perusteella löytyy syy tehdä asia toisin (miten?), niin sitten ohjelman logiikkaa pitää muuttaa.
 
 ## Linkkejä
 
